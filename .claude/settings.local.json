@@ -11,7 +11,11 @@
       "Bash(node:*)",
       "Bash(taskkill:*)",
       "Bash(npx kill-port:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(python3:*)",
+      "Bash(npm install:*)",
+      "Bash(powershell -Command \"Get-Content 'E:\\\\04bb99a18393885681077840b933952b-d1998a8b4bfa4c8d6195444e4902ef6aad62f233\\\\my new build\\\\src\\\\components\\\\CampaignOverview.tsx' | Select-Object -Skip 799\" 2>/dev/null)",
+      "Bash(powershell -Command \"Get-Content 'E:\\\\04bb99a18393885681077840b933952b-d1998a8b4bfa4c8d6195444e4902ef6aad62f233\\\\my new build\\\\src\\\\components\\\\CampaignOverview.tsx' | Select-Object -Skip 991 -First 90\")"
     ]
   }
 }

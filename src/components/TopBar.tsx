@@ -41,6 +41,8 @@ interface TopBarProps {
   unreadCount: number;
   saveState: 'idle' | 'saving' | 'saved' | 'error';
   lastSaved: Date | null;
+  dismissedNotifIds: Set<string>;
+  onDismissNotifs: React.Dispatch<React.SetStateAction<Set<string>>>;
 }
 
 function initials(value: string) {
@@ -80,6 +82,8 @@ export function TopBar({
   unreadCount,
   saveState,
   lastSaved,
+  dismissedNotifIds,
+  onDismissNotifs,
 }: TopBarProps) {
   const navigate = useNavigate();
   const [isNotifOpen, setIsNotifOpen] = useState(false);
@@ -215,7 +219,13 @@ export function TopBar({
               </span>
             )}
           </button>
-          <NotificationPanel isOpen={isNotifOpen} onClose={() => setIsNotifOpen(false)} triggerRef={notifButtonRef} />
+          <NotificationPanel
+            isOpen={isNotifOpen}
+            onClose={() => setIsNotifOpen(false)}
+            triggerRef={notifButtonRef}
+            dismissedIds={dismissedNotifIds}
+            onDismiss={onDismissNotifs}
+          />
         </div>
 
         {/* User menu */}

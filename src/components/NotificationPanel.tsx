@@ -1,4 +1,4 @@
-import React, { useContext, useMemo, useRef, useEffect, useState } from 'react';
+import React, { useContext, useMemo, useRef, useEffect } from 'react';
 import { AppContext } from './Root';
 import { Bell, CheckCircle2, Clock, AlertCircle, Trophy, X, ClipboardList, CheckCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -7,6 +7,8 @@ interface NotificationPanelProps {
   isOpen: boolean;
   onClose: () => void;
   triggerRef?: React.RefObject<HTMLElement | null>;
+  dismissedIds: Set<string>;
+  onDismiss: React.Dispatch<React.SetStateAction<Set<string>>>;
 }
 
 interface Notification {
@@ -49,7 +51,7 @@ const EMPTY_TASKS: NotificationTask[] = [];
 const EMPTY_SUCCESS_LOGS: SuccessLog[] = [];
 const EMPTY_TASK_NOTIFICATIONS: TaskNotificationRecord[] = [];
 
-export function NotificationPanel({ isOpen, onClose, triggerRef }: NotificationPanelProps) {
+export function NotificationPanel({ isOpen, onClose, triggerRef, dismissedIds, onDismiss }: NotificationPanelProps) {
   const ctx = useContext(AppContext);
   const tasks = (ctx?.operationalTasks?.length
     ? ctx.operationalTasks
@@ -58,7 +60,8 @@ export function NotificationPanel({ isOpen, onClose, triggerRef }: NotificationP
   const taskNotifications = (ctx?.taskNotifications as TaskNotificationRecord[] | undefined) ?? EMPTY_TASK_NOTIFICATIONS;
   const userEmail = ctx?.userEmail || '';
   const panelRef = useRef<HTMLDivElement>(null);
-  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const dismissed = dismissedIds;
+  const setDismissed = onDismiss;
 
   // Close on outside click / Escape
   useEffect(() => {

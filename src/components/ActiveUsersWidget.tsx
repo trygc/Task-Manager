@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Radio, Users } from 'lucide-react';
 import { supabase } from './supabaseClient';
@@ -47,12 +47,26 @@ export function ActiveUsersWidget({ userEmail, userName }: ActiveUsersWidgetProp
   const [activeUsers, setActiveUsers] = useState<PresenceUser[]>([]);
   const [connected, setConnected] = useState(false);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const connectedRef = useRef(false);
+
+  const trackSelf = useCallback(async () => {
+    const ch = channelRef.current;
+    if (!ch || !connectedRef.current) return;
+    try {
+      await ch.track({
+        user_id: userEmail,
+        email: userEmail,
+        name: userName || userEmail,
+        online_at: new Date().toISOString(),
+      });
+    } catch { /* ignore */ }
+  }, [userEmail, userName]);
 
   useEffect(() => {
     if (!userEmail) return;
 
     const channel = supabase.channel('platform-presence', {
-      config: { presence: { key: userEmail } },
+      config: { presence: { key: userEmail }, broadcast: { self: true } },
     });
 
     channelRef.current = channel;
@@ -84,6 +98,7 @@ export function ActiveUsersWidget({ userEmail, userName }: ActiveUsersWidgetProp
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
+          connectedRef.current = true;
           setConnected(true);
           await channel.track({
             user_id: userEmail,
@@ -91,17 +106,26 @@ export function ActiveUsersWidget({ userEmail, userName }: ActiveUsersWidgetProp
             name: userName || userEmail,
             online_at: new Date().toISOString(),
           });
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          connectedRef.current = false;
+          setConnected(false);
         } else {
+          connectedRef.current = false;
           setConnected(false);
         }
       });
 
+    // Re-track presence every 30 s to survive reconnects and keep online_at fresh
+    const heartbeat = window.setInterval(() => void trackSelf(), 30_000);
+
     return () => {
+      window.clearInterval(heartbeat);
+      connectedRef.current = false;
       channel.untrack().catch(() => undefined).finally(() => {
         void supabase.removeChannel(channel);
       });
     };
-  }, [userEmail, userName]);
+  }, [userEmail, userName, trackSelf]);
 
   const count = activeUsers.length;
 
@@ -183,8 +207,13 @@ export function ActiveUsersWidget({ userEmail, userName }: ActiveUsersWidgetProp
         ) : (
           <div className={cn('flex flex-col items-center justify-center py-6 text-zinc-400', !connected && 'opacity-50')}>
             <Radio className="w-7 h-7 mb-1.5 opacity-30" />
-            <p className="text-xs font-medium">{connected ? 'No other users online' : 'Connecting to presence…'}</p>
+            <p className="text-xs font-medium">{connected ? 'No users online yet' : 'Connecting to presence…'}</p>
           </div>
+        )}
+        {activeUsers.length === 1 && activeUsers[0].email === userEmail && connected && (
+          <p className="text-center text-[10px] text-zinc-400 dark:text-zinc-600 pt-1">
+            You're the only one online right now
+          </p>
         )}
       </div>
     </div>

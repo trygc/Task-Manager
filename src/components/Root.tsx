@@ -12,6 +12,7 @@ import { ConfigurationProvider } from '../context/ConfigurationContext';
 import { supabase } from './supabaseClient';
 import { Login } from './Login';
 import { CommandPalette } from './CommandPalette';
+import { ErrorBoundary } from './ErrorBoundary';
 import { apiRequest, type WorkspaceDataResponse } from '../lib/api';
 import {
   flattenOperationalTasks,
@@ -297,8 +298,19 @@ export function Root() {
   const [workspaceRevision, setWorkspaceRevision] = useState(0);
   const [lastPersistedRevision, setLastPersistedRevision] = useState(0);
 
+  // Dismissed notification IDs — lifted here so badge count stays in sync with panel state
+  const [dismissedNotifIds, setDismissedNotifIds] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set();
+    try {
+      const raw = window.localStorage.getItem('trygc-dismissed-notifs');
+      return raw ? new Set(JSON.parse(raw) as string[]) : new Set();
+    } catch { return new Set(); }
+  });
+
   const hasInitialNavigated = useRef(false);
   const workspaceRevisionRef = useRef(0);
+  // Track previous task-notification count so we only play sound on genuinely new arrivals
+  const prevMyNotifCountRef = useRef(-1);
   const communityWorkspaceRef = useRef<CommunityWorkspace>(createEmptyCommunityWorkspace());
   const workspaceSyncPayloadRef = useRef({
     tasks: [] as TaskRecord[],
@@ -890,6 +902,52 @@ export function Root() {
     return () => window.clearTimeout(timer);
   }, [saveState]);
 
+  // Persist dismissed notification IDs to localStorage
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem('trygc-dismissed-notifs', JSON.stringify([...dismissedNotifIds]));
+    } catch { /* ignore */ }
+  }, [dismissedNotifIds]);
+
+  // Play notification sound when new task_new notifications arrive for the current user
+  useEffect(() => {
+    if (!userEmail || !hasLoadedWorkspace) return;
+    const myCount = taskNotifications.filter(
+      (n) => String((n as Record<string, unknown>).assignedTo || '').toLowerCase() === userEmail.toLowerCase(),
+    ).length;
+    // On first load, just initialise the baseline — don't play sound
+    if (prevMyNotifCountRef.current < 0) {
+      prevMyNotifCountRef.current = myCount;
+      return;
+    }
+    if (myCount > prevMyNotifCountRef.current) {
+      try {
+        type AudioCtor = typeof AudioContext;
+        const AudioCtx: AudioCtor =
+          window.AudioContext ??
+          (window as unknown as { webkitAudioContext?: AudioCtor }).webkitAudioContext ??
+          null;
+        if (AudioCtx) {
+          const ac = new AudioCtx();
+          const osc = ac.createOscillator();
+          const gain = ac.createGain();
+          osc.connect(gain);
+          gain.connect(ac.destination);
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(880, ac.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(440, ac.currentTime + 0.18);
+          gain.gain.setValueAtTime(0.28, ac.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.38);
+          osc.start(ac.currentTime);
+          osc.stop(ac.currentTime + 0.38);
+          osc.onended = () => void ac.close();
+        }
+      } catch { /* Audio API unavailable — silent fail */ }
+    }
+    prevMyNotifCountRef.current = myCount;
+  }, [taskNotifications, userEmail, hasLoadedWorkspace]);
+
   const handleSession = (session: SessionLike) => {
     applySession(session);
   };
@@ -962,18 +1020,23 @@ export function Root() {
 
   const unreadCount = useMemo(() => {
     let count = 0;
-    count += successLogs.slice(0, 3).length;
-    count += operationalTasks.filter((task) => {
+    const successIds = successLogs.slice(0, 3).map((l) => `success-${l.id}`);
+    const overdueIds = operationalTasks.filter((task) => {
       if (task.status === 'Done' || !task.startDateTime) return false;
       const aging = (Date.now() - new Date(task.startDateTime).getTime()) / (1000 * 60 * 60);
       return aging > (task.slaHrs || 0);
-    }).slice(0, 3).length;
-    count += operationalTasks.filter((task) => task.status === 'Blocked').slice(0, 2).length;
-    count += taskNotifications
-      .filter((notification: NotificationRecord) => String(notification.assignedTo || '').toLowerCase() === userEmail.toLowerCase())
-      .slice(0, 5).length;
+    }).slice(0, 3).map((t) => `overdue-${t.id}`);
+    const blockedIds = operationalTasks.filter((task) => task.status === 'Blocked').slice(0, 2).map((t) => `blocked-${t.id}`);
+    const taskNewIds = taskNotifications
+      .filter((n: NotificationRecord) => String(n.assignedTo || '').toLowerCase() === userEmail.toLowerCase())
+      .slice(0, 5)
+      .map((n) => String((n as Record<string, unknown>).id ?? ''));
+
+    for (const id of [...successIds, ...overdueIds, ...blockedIds, ...taskNewIds]) {
+      if (!dismissedNotifIds.has(id)) count++;
+    }
     return Math.min(count, 99);
-  }, [operationalTasks, successLogs, taskNotifications, userEmail]);
+  }, [operationalTasks, successLogs, taskNotifications, userEmail, dismissedNotifIds]);
 
   const openCommandPalette = useCallback(() => {
     setIsCommandPaletteOpen(true);
@@ -1153,6 +1216,8 @@ export function Root() {
                 unreadCount={unreadCount}
                 saveState={saveState}
                 lastSaved={lastSaved}
+                dismissedNotifIds={dismissedNotifIds}
+                onDismissNotifs={setDismissedNotifIds}
               />
 
               <main className="app-shell-background flex-1 overflow-y-auto overflow-x-hidden pb-[calc(var(--app-mobile-nav-height)+env(safe-area-inset-bottom,0px)+12px)] lg:pb-0 scrollbar-thin">
@@ -1213,20 +1278,22 @@ export function Root() {
                       </div>
                     </div>
                   ) : routeRedirect ? null : (
-                    <React.Suspense fallback={<RouteLoadingFallback />}>
-                      <AnimatePresence mode="wait" initial={false}>
-                        <motion.div
-                          key={pathname}
-                          initial={{ opacity: 0, y: 8 }}
-                          animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                          exit={{ opacity: 0, y: -6 }}
-                          transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
-                          className="route-page-layout"
-                        >
-                          <RouteComponent />
-                        </motion.div>
-                      </AnimatePresence>
-                    </React.Suspense>
+                    <ErrorBoundary>
+                      <React.Suspense fallback={<RouteLoadingFallback />}>
+                        <AnimatePresence mode="wait" initial={false}>
+                          <motion.div
+                            key={pathname}
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                            exit={{ opacity: 0, y: -6 }}
+                            transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+                            className="route-page-layout"
+                          >
+                            <RouteComponent />
+                          </motion.div>
+                        </AnimatePresence>
+                      </React.Suspense>
+                    </ErrorBoundary>
                   )}
                 </div>
               </main>

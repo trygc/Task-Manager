@@ -191,6 +191,7 @@ export function TasksDailyRoutines() {
   const teamMembers: Array<{ email: string; name: string; teamName?: string }> = ctx?.teamMembers || [];
   const pmoTasks: PMOTask[] = ctx?.standaloneTasks || [];
   const setPmoTasks = ctx?.setStandaloneTasks || (() => {});
+  const setTaskNotifications = ctx?.setTaskNotifications || (() => {});
   const userEmail: string = ctx?.userEmail || "";
   const disabledTeams: string[] = ctx?.disabledTeams || [];
   const enabledTeams = OPERATIONS_TEAMS.filter((t) => !disabledTeams.includes(t.id));
@@ -269,7 +270,8 @@ export function TasksDailyRoutines() {
 
   // ── Task actions ──────────────────────────────────────────────────────────────
   const saveTask = (task: PMOTask) => {
-    const exists = pmoTasks.some((t) => t.id === task.id);
+    const previousTask = pmoTasks.find((t) => t.id === task.id);
+    const exists = Boolean(previousTask);
     if (exists) {
       setPmoTasks((prev: PMOTask[]) => prev.map((t) => (t.id === task.id ? task : t)));
       toast.success("Task updated");
@@ -277,6 +279,34 @@ export function TasksDailyRoutines() {
       setPmoTasks((prev: PMOTask[]) => [task, ...prev]);
       toast.success("Task created");
     }
+
+    // Create a task_assigned notification when a person is assigned (new or changed)
+    const wasAssignedTo = previousTask?.assignedToEmail?.toLowerCase() || '';
+    const isAssignedTo = task.assignedToEmail?.toLowerCase() || '';
+    const assignmentChanged =
+      task.assignmentMode === 'person' &&
+      isAssignedTo &&
+      (!exists || wasAssignedTo !== isAssignedTo);
+
+    if (assignmentChanged) {
+      const now = new Date();
+      const notification = {
+        id: `assign-pmo-${task.id}-${now.getTime()}`,
+        type: 'task_assigned',
+        taskId: task.id,
+        taskName: task.title,
+        taskDescription: task.description,
+        assignedTo: isAssignedTo,
+        assignedToName: task.assignedToName,
+        assignedBy: userEmail,
+        timestamp: now.toISOString(),
+        time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        date: now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        read: false,
+      };
+      setTaskNotifications((current) => [notification, ...current]);
+    }
+
     setEditingTask(null);
   };
 
