@@ -4,6 +4,6 @@ const App = dynamic(() => import("@/App"), {
   ssr: false,
 });
 
-export default function CatchAllPage() {
+export default function IndexPage() {
   return <App />;
 }

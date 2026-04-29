@@ -215,6 +215,27 @@ function writeStoredWorkspaceRecords(key: string, value: unknown) {
   }
 }
 
+function toStableNumericId(value: unknown, fallback: string) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  const input = String(value ?? fallback);
+  let hash = 0;
+  for (let index = 0; index < input.length; index += 1) {
+    hash = ((hash << 5) - hash + input.charCodeAt(index)) | 0;
+  }
+
+  return Math.abs(hash) || 1;
+}
+
 function mergeWorkspaceRecords<T extends { id: string; updatedAt?: string }>(primary: T[], secondary: T[]) {
   const merged = new Map<string, T>();
 
@@ -1003,7 +1024,10 @@ export function Root() {
       [...flattenOperationalTasks(opsCampaigns), ...flattenCommunityWorkspaceTasks(communityWorkspace)]
         .map((task) => ({
           ...task,
-          id: Number(task.id ?? 0),
+          id: toStableNumericId(
+            task.id,
+            `${task.campaignId || task.teamId || 'task'}-${task.createdAt || task.title || task.description}`,
+          ),
           description: String(task.description ?? task.title ?? ''),
           campaign: String(task.campaign ?? ''),
           assignedTo: String(task.assignedTo ?? ''),

@@ -22,16 +22,12 @@ const routeComponents: Record<string, RouteComponent> = {
   "/analytics": lazyRoute(() => import("./components/Analytics"), "Analytics"),
   "/archive": lazyRoute(() => import("./components/Archive"), "Archive"),
   "/campaigns": lazyRoute(() => import("./components/CampaignsManager"), "CampaignsManager"),
-  "/campaign-overview": lazyRoute(() => import("./components/CampaignOverview"), "CampaignOverview"),
-  "/campaign-intake": lazyRoute(() => import("./components/CampaignIntake"), "CampaignIntake"),
   "/community-team": lazyRoute(() => import("./components/CommunityTeam"), "CommunityTeam"),
+  "/coverage": lazyRoute(() => import("./components/CoverageBoard"), "CoverageBoard"),
   "/data-export": lazyRoute(() => import("./components/DataExport"), "DataExport"),
   "/data-import": lazyRoute(() => import("./components/DataImport"), "DataImport"),
   "/demo": lazyRoute(() => import("./components/PlatformDemo"), "PlatformDemo"),
-  "/functions": lazyRoute(() => import("./components/FunctionKanban"), "FunctionKanban"),
-  "/handover": lazyRoute(() => import("./components/HandoverBoard"), "HandoverBoard"),
   "/member-views": lazyRoute(() => import("./components/MemberViews"), "MemberViews"),
-  "/mistakes": lazyRoute(() => import("./components/MistakeLogger"), "MistakeLogger"),
   "/personal": lazyRoute(() => import("./components/PersonalDashboardRoute"), "PersonalDashboard"),
   "/reports": lazyRoute(() => import("./components/Reports"), "Reports"),
   "/configuration": lazyRoute(() => import("./components/ConfigurationManager"), "ConfigurationManager"),
@@ -42,13 +38,18 @@ const routeComponents: Record<string, RouteComponent> = {
     () => import("./components/TasksDailyRoutines"),
     "TasksDailyRoutines",
   ),
-  "/update-organizer": lazyRoute(() => import("./components/UpdateOrganizer"), "UpdateOrganizer"),
   "/user-management": lazyRoute(() => import("./components/UserManagementRoute"), "UserManagementRoute"),
   "/widgets": lazyRoute(() => import("./components/WidgetsBoard"), "WidgetsBoard"),
 };
 
 const routeRedirects: Record<string, string> = {
   "/ops": "/campaigns",
+  "/campaign-overview": "/campaigns",
+  "/campaign-intake": "/campaigns",
+  "/mistakes": "/tasks",
+  "/update-organizer": "/tasks",
+  "/handover": "/tasks",
+  "/functions": "/tasks",
 };
 
 function normalizePathname(pathname: string | null | undefined) {
