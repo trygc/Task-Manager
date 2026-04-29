@@ -307,7 +307,6 @@ export function Dashboard() {
             <ActionRow label="View All Tasks" to={isAdmin ? '/tasks' : '/personal'} navigate={navigate} primary />
             {isAdmin && (
               <>
-                <ActionRow label="Function Kanban" to="/functions" navigate={navigate} />
                 <ActionRow label="Team Analytics" to="/analytics" navigate={navigate} />
                 <ActionRow label="Member Views" to="/member-views" navigate={navigate} />
               </>
